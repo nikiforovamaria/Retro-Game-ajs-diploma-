@@ -7,6 +7,8 @@ import cursors from './cursors';
 import Team from './Team';
 import GameState from './GameState';
 import { getMovesCells, getAttackCells } from './calcCells';
+import showCharInfo from './showCharInfo';
+import getIndex from './getIndex';
 
 export default class GameController {
   constructor(gamePlay, stateService) {
@@ -168,13 +170,6 @@ export default class GameController {
     }
   }
 
-  // character info message
-  /*
-  showCharInfo(char) {
-    return `${'\u{1F396}'} ${char.level} ${'\u{2694}'} ${char.attack}
-     ${'\u{1F6E1}'} ${char.defence} ${'\u{2764}'} ${char.health}`;
-  }
-*/
   // entering the cell
 
   onCellEnter(index) {
@@ -182,7 +177,7 @@ export default class GameController {
     this.index = index;
     for (const item of [...this.playerPositions, ...this.enemyPositions]) {
       if (item.position === index) {
-        this.gamePlay.showCellTooltip(this.showCharInfo(item.character), index);
+        this.gamePlay.showCellTooltip(showCharInfo(item.character), index);
       }
     }
     if (this.selected) {
@@ -247,56 +242,184 @@ export default class GameController {
       this.gamePlay.deselectCell(index);
       this.selected = false;
       this.gamePlay.redrawPositions([...this.userPositions, ...this.enemyPositions]);
+
       // enemy turn
       this.player = 'enemy';
       this.enemyStrategy();
+
       // our attack
     } else if (this.selected && this.gamePlay.boardEl.style.cursor === 'crosshair') {
-      const attack = [...this.enemyPositions].find((item) => item.position === index);
+      const target = [...this.enemyPositions].find((item) => item.position === index);
       this.gamePlay.deselectCell(this.selectedIndex);
       this.gamePlay.deselectCell(index);
       this.gamePlay.setCursor(cursors.auto);
       this.selected = false;
-      await this.characterAttack(this.selectedChar.character, attack);
+      await this.charAttack(this.selectedChar.character, target);
       if (this.enemyPositions.length > 0) {
         this.enemyStrategy();
       }
     }
   }
 
-  // tbc
-  async characterAttack(attacker, attacked) {
-    const attackedCharacter = attacked.character;
-    const damage = Math.floor(Math.max(attacker.attack
-       - attackedCharacter.defence, attacker.attack * 0.1));
-    await this.gamePlay.showDamage(attacked.position, damage);
-    attackedCharacter.health -= damage;
-    if (this.player === 'user') {
+  // attack strategy
+  async charAttack(char, target) {
+    const targetChar = target.character;
+    const damage = Math.floor(Math.max(char.attack
+       - targetChar.defence, char.attack * 0.1));
+    await this.gamePlay.showDamage(target.position, damage);
+    targetChar.health -= damage;
+    if (this.player === 'player') {
       this.player = 'enemy';
     } else if (this.player === 'enemy') {
-      this.player = 'user';
+      this.player = 'player';
     }
 
-    // Если персонаж погиб, убираем игрока
-    if (attacked.character.health <= 0) {
-      this.userPositions = this.userPositions.filter((item) => item.position !== attacked.position);
-      this.enemyPositions = this.enemyPositions.filter((item) => item.position
-      !== attacked.position);
+    // removing dead character
+    if (target.character.health <= 0) {
+      this.playerPositions = this.playerPositions
+        .filter((item) => item.position !== target.position);
+      this.enemyPositions = this.enemyPositions
+        .filter((item) => item.position !== target.position);
 
-      // Если погибли все персонажи юзера, то выдаем ошибку
-      if (this.userPositions.length === 0) {
-        GamePlay.showMessage('Вы проиграли!');
+      // player lost and all his characters dead
+      if (this.playerPositions.length === 0) {
+        GamePlay.showMessage('Game over! You lost...');
       }
-      // Если погибли все персонажи противника, повышаем левел и переходим на новый
+
+      // on to the next level when enemy lost
       if (this.enemyPositions.length === 0) {
-        for (const item of this.userPositions) {
-          this.point += item.character.health;
+        for (const item of this.playerPositions) {
+          this.score += item.character.health;
         }
-        this.levelUp();
         this.level += 1;
-        this.drawTeams();
+        this.checkLevel();
       }
     }
     this.gamePlay.redrawPositions([...this.userPositions, ...this.enemyPositions]);
+  }
+
+  // enemy attack
+
+  async enemyAttacks(char, target) {
+    await this.charAttack(char, target);
+    this.player = 'player';
+  }
+
+  // enemy strategy
+
+  enemyStrategy() {
+    if (this.player === 'enemy') {
+      // attacking players characters
+      for (const enemy of [...this.enemyPositions]) {
+        const attack = getAttackCells(enemy.position,
+          this.selectedChar.character.attackDistance, this.gamePlay.boardSize);
+        const target = this.enemyTarget(attack);
+        if (target !== null) {
+          this.enemyAttacks(enemy.character, target);
+          return;
+        }
+      }
+      // enemy moves
+      const random = Math.floor(Math.random() * [...this.enemyPositions].length);
+      const enemy = [...this.enemyPositions][random];
+      this.enemyMove(enemy);
+      this.gamePlay.redrawPositions([...this.userPositions, ...this.enemyPositions]);
+      this.player = 'player';
+    }
+  }
+
+  // choosing enemy's target
+
+  enemyTarget(attack) {
+    for (const player of [...this.playerPositions]) {
+      if (attack.includes(player.position)) {
+        return player;
+      }
+    }
+    return null;
+  }
+
+  // enemy moves strategy
+
+  enemyMove(enemy) {
+    const tempEnemy = enemy;
+    const enemyDistance = enemy.character.distance;
+    let tempRow;
+    let tempColumn;
+    let stepRow;
+    let stepColumn;
+    let Steps;
+    const enemyRow = Math.floor(tempEnemy.position / this.gamePlay.boardSize);
+    const enemyColumn = tempEnemy.position % this.gamePlay.boardSize;
+    let nearPlayer = {};
+
+    for (const player of [...this.playerPositions]) {
+      const playerRow = Math.floor(player.position / this.gamePlay.boardSize);
+      const playerColumn = player.position % this.gamePlay.boardSize;
+      stepRow = enemyRow - playerRow;
+      stepColumn = enemyColumn - playerColumn;
+      Steps = Math.abs(stepRow) + Math.abs(stepColumn);
+      if (nearPlayer.steps === undefined || Steps < nearPlayer.steps) {
+        nearPlayer = {
+          steprow: stepRow,
+          stepcolumn: stepColumn,
+          steps: Steps,
+          positionRow: playerRow,
+          positionColumn: playerColumn,
+        };
+      }
+    }
+    // diagonal move
+    if (Math.abs(nearPlayer.steprow) === Math.abs(nearPlayer.stepcolumn)) {
+      if (Math.abs(nearPlayer.steprow) > enemyDistance) {
+        tempRow = (enemyRow - (enemyDistance * Math.sign(nearPlayer.steprow)));
+        tempColumn = (enemyColumn - (enemyDistance * Math.sign(nearPlayer.stepcolumn)));
+
+        tempEnemy.position = getIndex(tempRow, tempColumn);
+      } else {
+        tempRow = (enemyRow - (nearPlayer.steprow - (1 * Math.sign(nearPlayer.steprow))));
+        tempColumn = (enemyColumn - (nearPlayer.stepcolumn - (1 * Math.sign(nearPlayer.steprow))));
+
+        tempEnemy.position = getIndex(tempRow, tempColumn);
+      }
+    } else if (nearPlayer.stepcolumn === 0) {
+      // vertical move
+      if (Math.abs(nearPlayer.steprow) > enemyDistance) {
+        tempRow = (enemyRow - (enemyDistance * Math.sign(nearPlayer.steprow)));
+
+        tempEnemy.position = getIndex(tempRow, (enemyColumn));
+      } else {
+        tempRow = (enemyRow - (nearPlayer.steprow - (1 * Math.sign(nearPlayer.steprow))));
+
+        tempEnemy.position = getIndex(tempRow, (enemyColumn));
+      }
+    } else if (nearPlayer.steprow === 0) {
+      if (Math.abs(nearPlayer.stepcolumn) > enemyDistance) {
+        tempColumn = (enemyColumn - (enemyDistance * Math.sign(nearPlayer.stepcolumn)));
+
+        tempEnemy.position = getIndex((enemyRow), tempColumn);
+      } else {
+        const tempFormul = (nearPlayer.stepcolumn - (1 * Math.sign(nearPlayer.stepcolumn)));
+        tempColumn = (enemyColumn - tempFormul);
+
+        tempEnemy.position = getIndex((enemyRow), tempColumn);
+      }
+    } else if (Math.abs(nearPlayer.steprow) > Math.abs(nearPlayer.stepcolumn)) {
+      if (Math.abs(nearPlayer.steprow) > enemyDistance) {
+        tempRow = (enemyRow - (enemyDistance * Math.sign(nearPlayer.steprow)));
+
+        tempEnemy.position = getIndex(tempRow, (enemyColumn));
+      } else {
+        tempRow = (enemyRow - (nearPlayer.steprow));
+
+        tempEnemy.position = getIndex(tempRow, (enemyColumn));
+      }
+    } else if (Math.abs(nearPlayer.stepcolumn) > enemyDistance) {
+      tempColumn = (enemyColumn - (enemyDistance * Math.sign(nearPlayer.stepcolumn)));
+
+      tempEnemy.position = getIndex((enemyRow), tempColumn);
+    } else {
+      tempEnemy.position = getIndex((enemyRow), (enemyColumn));
+    }
   }
 }
