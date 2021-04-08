@@ -1,5 +1,5 @@
 import Character from '../Character';
-import Bowman from '../Characters/Bowman';
+import Bowman from '../characters/Bowman';
 
 test('1 - should give an error about new Character', () => {
   const result = 'Character cannot be called with new';

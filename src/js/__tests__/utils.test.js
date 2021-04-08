@@ -1,4 +1,4 @@
-import calcTileType from '../utils';
+import { calcTileType } from '../utils';
 
 test.each([
   [0, 8, 'top-left'],
@@ -10,7 +10,7 @@ test.each([
   [57, 8, 'bottom'],
   [63, 8, 'bottom-right'],
   [9, 8, 'center'],
-  [0, 9, 'center'],
+  [0, 9, 'top-left'],
 ])(('should return tile type'), (index, boardSize, result) => {
   const received = calcTileType(index, boardSize);
   expect(received).toBe(result);
