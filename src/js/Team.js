@@ -1,9 +1,9 @@
-import Bowman from './characters/Bowman';
-import Swordsman from './characters/Swordsman';
-import Daemon from './characters/Daemon';
-import Magician from './characters/Magician';
-import Undead from './characters/Undead';
-import Vampire from './characters/Vampire';
+import Bowman from './Characters/Bowman';
+import Swordsman from './Characters/Swordsman';
+import Daemon from './Characters/Daemon';
+import Magician from './Characters/Magician';
+import Undead from './Characters/Undead';
+import Vampire from './Characters/Vampire';
 
 export default class Team {
   static getStartUserTeam() {

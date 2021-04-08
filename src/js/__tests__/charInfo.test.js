@@ -1,5 +1,5 @@
-import getCharInfo from '../characters/charInfo';
-import Bowman from '../characters/Bowman';
+import getCharInfo from '../Characters/charInfo';
+import Bowman from '../Characters/Bowman';
 
 test('should return info about character with icons', () => {
   const bowman = new Bowman(1);

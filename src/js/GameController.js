@@ -3,7 +3,7 @@ import themes from './themes';
 import Team from './Team';
 import { generateTeam } from './generators';
 import PositionedCharacter from './PositionedCharacter';
-import getCharInfo from './characters/charInfo';
+import getCharInfo from './Characters/charInfo';
 import GamePlay from './GamePlay';
 import GameState from './GameState';
 import cursors from './cursors';
